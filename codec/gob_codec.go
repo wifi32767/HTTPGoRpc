@@ -35,13 +35,13 @@ func (g *GobCodec) EncodeString(msg any) (string, error) {
 	return string(data), nil
 }
 
-func (g *GobCodec) Decode(data []byte, msg *any) error {
+func (g *GobCodec) Decode(data []byte, msg any) error {
 	g.reader.Reset(data)
 	decoder := gob.NewDecoder(g.reader)
 	err := decoder.Decode(msg)
 	return err
 }
 
-func (g *GobCodec) DecodeString(data string, msg *any) error {
+func (g *GobCodec) DecodeString(data string, msg any) error {
 	return g.Decode([]byte(data), msg)
 }

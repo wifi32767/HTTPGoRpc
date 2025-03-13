@@ -6,6 +6,11 @@ import (
 
 const MagicNumber int = 0x123456
 
+const (
+	TypeCall    = "Call"
+	TypeConnect = "Connect"
+)
+
 type Header struct {
 	Service string
 	Method  string

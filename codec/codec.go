@@ -2,10 +2,11 @@ package codec
 
 // 编解码器，用于将消息体编码成字节流或者将字节流解码成消息体
 type Codec interface {
-	Encode(any) ([]byte, error)
-	EncodeString(any) (string, error)
-	Decode(data []byte, msg *any) error
-	DecodeString(data string, msg *any) error
+	Encode(msg any) ([]byte, error)
+	EncodeString(msg any) (string, error)
+	// 解码的 msg 必须是指针类型
+	Decode(data []byte, msg any) error
+	DecodeString(data string, msg any) error
 }
 
 type CodecConstructor func() Codec

@@ -3,6 +3,7 @@ package gorpc
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"reflect"
@@ -42,6 +43,13 @@ func NewServer(name string, server any) *Server {
 }
 
 func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
+	// 判断是否是一个调用
+	if r.Header.Get("X-Type") != TypeCall {
+		slog.Error("rpc server: wrong message type")
+		s.sendErr(w, fmt.Errorf("rpc server: wrong message type"), http.StatusBadRequest)
+		return
+	}
+
 	// 解析头部
 	header, err := s.parseHeader(r)
 
@@ -77,8 +85,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 获取body
-	body := make([]byte, r.ContentLength)
-	_, err = r.Body.Read(body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		slog.Error("rpc server: read body failed", err)
 		s.sendErr(w, err, http.StatusBadRequest)
@@ -90,12 +97,13 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	if method.newArgv().Type().Kind() != reflect.Ptr {
 		req = method.newArgv().Addr().Interface()
 	}
-	if err := cc.Decode(body, &req); err != nil {
+	if err := cc.Decode(body, req); err != nil {
 		slog.Error("rpc server: decode body failed", err)
 		s.sendErr(w, err, http.StatusBadRequest)
 	}
+	slog.Debug("rpc server: request", req)
 	// 调用方法
-	resp, err := s.call(method, body)
+	resp, err := s.call(method, req)
 	if err != nil {
 		slog.Error("rpc server: call method failed", err)
 		s.sendErr(w, err, http.StatusInternalServerError)
@@ -113,7 +121,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) parseHeader(r *http.Request) (*Header, error) {
-	h := r.Header.Get("X-header")
+	h := r.Header.Get("X-Header")
 	if h == "" {
 		return nil, fmt.Errorf("rpc server: header is empty")
 	}

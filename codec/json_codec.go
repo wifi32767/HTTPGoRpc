@@ -28,7 +28,7 @@ func (c *JsonCodec) EncodeString(msg any) (string, error) {
 	return string(data), nil
 }
 
-func (c *JsonCodec) Decode(data []byte, msg *any) error {
+func (c *JsonCodec) Decode(data []byte, msg any) error {
 	err := json.Unmarshal(data, msg)
 	if err != nil {
 		slog.Error("json codec:", "json decode error", err)
@@ -36,6 +36,6 @@ func (c *JsonCodec) Decode(data []byte, msg *any) error {
 	return err
 }
 
-func (c *JsonCodec) DecodeString(data string, msg *any) error {
+func (c *JsonCodec) DecodeString(data string, msg any) error {
 	return c.Decode([]byte(data), msg)
 }
