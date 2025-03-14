@@ -1,30 +1,64 @@
 package gorpc
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/wifi32767/GoRpc/codec"
 )
 
+// 这两个结构体用于注册中心的注册
+type ServiceInfo struct {
+	Name    string
+	Addr    string
+	Timeout time.Duration
+}
+
+type Service struct {
+	Info         ServiceInfo
+	LastPingTime time.Time
+}
+
 type Server struct {
-	Name       string
-	ServiceMap sync.Map
+	Name             string
+	Addr             string
+	Port             string
+	HeartBeatTimeout time.Duration
+	ServiceMap       sync.Map
+	srv              *http.Server
+	cli              *http.Client
 }
 
 // 传入一个自定义的struct对象
 // 该结构体的所有public方法都会被注册
 // 这些方法必须是形如func(req, resp any) error的形式
 // 其中req是请求的值，resp是一个用于获取结果的指针
-func NewServer(name string, server any) *Server {
+func NewServer(name, port string, server any, heartbeattimeout time.Duration) (*Server, error) {
+	addr := getLocalIP()
+	if addr == "" {
+		err := fmt.Errorf("cannot get local ip")
+		slog.Error(err.Error())
+		return nil, err
+	}
 	srv := &Server{
-		Name:       name,
-		ServiceMap: sync.Map{},
+		Name:             name,
+		Addr:             getLocalIP(),
+		Port:             port,
+		HeartBeatTimeout: heartbeattimeout,
+		ServiceMap:       sync.Map{},
+		srv: &http.Server{
+			Addr: port,
+		},
+		cli: &http.Client{},
 	}
 	// 注册所有的public方法
 	t := reflect.TypeOf(server)
@@ -39,12 +73,13 @@ func NewServer(name string, server any) *Server {
 	}
 	slog.Info(fmt.Sprintf("rpc server: service %s registerd", name))
 	http.HandleFunc("/call", srv.handler)
-	return srv
+	return srv, nil
 }
 
 func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	// 判断是否是一个调用
 	if r.Header.Get("X-Type") != TypeCall {
+		slog.Debug(r.Header.Get("X-Type"))
 		slog.Error("rpc server: wrong message type")
 		s.sendErr(w, fmt.Errorf("rpc server: wrong message type"), http.StatusBadRequest)
 		return
@@ -189,6 +224,83 @@ func (s *Server) call(method *Method, req any) (any, error) {
 	return ret.Interface(), errRet[0].Interface().(error)
 }
 
-func (s *Server) Run(port string) error {
-	return http.ListenAndServe(port, nil)
+func (s *Server) Run() error {
+	slog.Info("rpc server: Running")
+	return s.srv.ListenAndServe()
+}
+
+func (s *Server) RunWithRegistry(registryAddr string) error {
+	s.register(registryAddr, s.HeartBeatTimeout)
+	go s.heartBeat(registryAddr, s.HeartBeatTimeout)
+	return s.Run()
+}
+
+func (s *Server) register(registryAddr string, timeout time.Duration) {
+	service := ServiceInfo{
+		Name:    s.Name,
+		Addr:    s.Addr + s.Port,
+		Timeout: timeout,
+	}
+	body, err := json.Marshal(service)
+	if err != nil {
+		slog.Error("rpc server: marshal service info failed", "err", err)
+		return
+	}
+	req, err := http.NewRequest("POST", registryAddr+"/register", bytes.NewBuffer(body))
+	if err != nil {
+		slog.Error("rpc server: new request failed", "err", err)
+		return
+	}
+	req.Header.Set("X-Type", TypeRegister)
+	resp, err := s.cli.Do(req)
+	if err != nil {
+		slog.Error("rpc server: send request failed", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+}
+
+func (s *Server) heartBeat(registryAddr string, timeout time.Duration) {
+	info := ServiceInfo{
+		Name:    s.Name,
+		Addr:    s.Addr + s.Port,
+		Timeout: s.HeartBeatTimeout,
+	}
+	b, err := json.Marshal(info)
+	if err != nil {
+		slog.Error("rpc server: marshal failed", "err", err)
+		return
+	}
+
+	for {
+		time.Sleep(timeout)
+		req, err := http.NewRequest("POST", registryAddr+"/heartbeat", bytes.NewBuffer(b))
+		if err != nil {
+			slog.Error("rpc server: new request failed", "err", err)
+			return
+		}
+		req.Header.Set("X-Type", TypePing)
+
+		_, err = s.cli.Do(req)
+		if err != nil {
+			slog.Error("rpc server: send request failed", "err", err)
+			continue
+		}
+	}
+}
+
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Fatalf("Failed to get interface addresses: %v", err)
+	}
+
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+			if ipNet.IP.To4() != nil {
+				return ipNet.IP.String()
+			}
+		}
+	}
+	return ""
 }

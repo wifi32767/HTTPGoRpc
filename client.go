@@ -58,6 +58,40 @@ func parseOptions(opts ...*Options) (*Options, error) {
 }
 
 func (c *Client) Call(service, method string, arg any, ret any) error {
+	if c.Opt.UseRegistry {
+		// 从注册中心获取服务地址
+		addr, err := c.getAddr(service)
+		if err != nil {
+			slog.Error("rpc client: get addr failed", "err", err)
+			return err
+		}
+		return c.call(addr, service, method, arg, ret)
+	}
+	return c.call(c.TargetAddr, service, method, arg, ret)
+}
+
+func (c *Client) getAddr(service string) (string, error) {
+	req, err := http.NewRequest("POST", c.TargetAddr+"/get", bytes.NewBufferString(service))
+	if err != nil {
+		slog.Error("rpc client: new request failed", "err", err)
+		return "", err
+	}
+	req.Header.Set("X-Type", TypeAsk)
+	resp, err := c.cli.Do(req)
+	if err != nil {
+		slog.Error("rpc client: send request failed", "err", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+	addr, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Error("rpc client: read response failed", "err", err)
+		return "", err
+	}
+	return string(addr), nil
+}
+
+func (c *Client) call(addr, service, method string, arg any, ret any) error {
 	// 创建请求头
 	h := Header{
 		Service: service,
@@ -76,7 +110,7 @@ func (c *Client) Call(service, method string, arg any, ret any) error {
 		return err
 	}
 	// 发送请求
-	resp, err := c.sendReq(header, body)
+	resp, err := c.sendReq(TypeCall, addr, header, body)
 	if err != nil {
 		return err
 	}
@@ -89,13 +123,13 @@ func (c *Client) Call(service, method string, arg any, ret any) error {
 	return nil
 }
 
-func (c *Client) sendReq(header, body []byte) (*http.Response, error) {
-	req, err := http.NewRequest("POST", c.TargetAddr+"/call", bytes.NewBuffer(body))
+func (c *Client) sendReq(typ, addr string, header, body []byte) (*http.Response, error) {
+	req, err := http.NewRequest("POST", "http://"+addr+"/call", bytes.NewBuffer(body))
 	if err != nil {
 		slog.Error("rpc client: new request failed", "err", err)
 		return nil, err
 	}
-	req.Header.Set("X-Type", TypeCall)
+	req.Header.Set("X-Type", typ)
 	req.Header.Set("X-Header", string(header))
 	resp, err := c.cli.Do(req)
 	if err != nil {

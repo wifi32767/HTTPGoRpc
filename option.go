@@ -7,8 +7,10 @@ import (
 const MagicNumber int = 0x123456
 
 const (
-	TypeCall    = "Call"
-	TypeConnect = "Connect"
+	TypeCall     = "Call"
+	TypeRegister = "Reg"
+	TypePing     = "Ping"
+	TypeAsk      = "Ask"
 )
 
 type Header struct {
@@ -20,9 +22,11 @@ type Header struct {
 type Options struct {
 	MagicNumber int
 	CodecType   codec.Type
+	UseRegistry bool
 }
 
 var DefaultOptions = &Options{
 	MagicNumber: MagicNumber,
 	CodecType:   codec.TypeGob,
+	UseRegistry: false,
 }
