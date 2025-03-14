@@ -1,7 +1,7 @@
 package gorpc
 
 import (
-	"github.com/wifi32767/GoRpc/codec"
+	"github.com/wifi32767/HTTPGoRpc/codec"
 )
 
 const MagicNumber int = 0x123456

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wifi32767/GoRpc/codec"
+	"github.com/wifi32767/HTTPGoRpc/codec"
 )
 
 // 这两个结构体用于注册中心的注册

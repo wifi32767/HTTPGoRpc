@@ -2,13 +2,14 @@ package gorpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 
-	"github.com/wifi32767/GoRpc/codec"
+	"github.com/wifi32767/HTTPGoRpc/codec"
 )
 
 type Client struct {
@@ -57,7 +58,7 @@ func parseOptions(opts ...*Options) (*Options, error) {
 	return opt, nil
 }
 
-func (c *Client) Call(service, method string, arg any, ret any) error {
+func (c *Client) Call(ctx context.Context, service, method string, arg any, ret any) error {
 	if c.Opt.UseRegistry {
 		// 从注册中心获取服务地址
 		addr, err := c.getAddr(service)
@@ -65,9 +66,9 @@ func (c *Client) Call(service, method string, arg any, ret any) error {
 			slog.Error("rpc client: get addr failed", "err", err)
 			return err
 		}
-		return c.call(addr, service, method, arg, ret)
+		return c.call(ctx, addr, service, method, arg, ret)
 	}
-	return c.call(c.TargetAddr, service, method, arg, ret)
+	return c.call(ctx, c.TargetAddr, service, method, arg, ret)
 }
 
 func (c *Client) getAddr(service string) (string, error) {
@@ -91,7 +92,7 @@ func (c *Client) getAddr(service string) (string, error) {
 	return string(addr), nil
 }
 
-func (c *Client) call(addr, service, method string, arg any, ret any) error {
+func (c *Client) call(ctx context.Context, addr, service, method string, arg any, ret any) error {
 	// 创建请求头
 	h := Header{
 		Service: service,
@@ -110,7 +111,7 @@ func (c *Client) call(addr, service, method string, arg any, ret any) error {
 		return err
 	}
 	// 发送请求
-	resp, err := c.sendReq(TypeCall, addr, header, body)
+	resp, err := c.sendReq(ctx, TypeCall, addr, header, body)
 	if err != nil {
 		return err
 	}
@@ -123,8 +124,8 @@ func (c *Client) call(addr, service, method string, arg any, ret any) error {
 	return nil
 }
 
-func (c *Client) sendReq(typ, addr string, header, body []byte) (*http.Response, error) {
-	req, err := http.NewRequest("POST", "http://"+addr+"/call", bytes.NewBuffer(body))
+func (c *Client) sendReq(ctx context.Context, typ, addr string, header, body []byte) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", "http://"+addr+"/call", bytes.NewBuffer(body))
 	if err != nil {
 		slog.Error("rpc client: new request failed", "err", err)
 		return nil, err
@@ -154,4 +155,13 @@ func (c *Client) parseResp(resp *http.Response, ret any) error {
 		return err
 	}
 	return nil
+}
+
+func (c *Client) AsyncCall(ctx context.Context, service, method string, arg any, ret any) chan error {
+	ch := make(chan error, 1)
+	go func() {
+		err := c.Call(ctx, service, method, arg, ret)
+		ch <- err
+	}()
+	return ch
 }

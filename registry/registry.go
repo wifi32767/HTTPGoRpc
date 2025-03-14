@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	gorpc "github.com/wifi32767/GoRpc"
+	gorpc "github.com/wifi32767/HTTPGoRpc"
 )
 
 // 这个设置比较原始，只有这一个项目
