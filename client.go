@@ -22,7 +22,7 @@ func NewClient(addr string, opts ...*Options) *Client {
 	// 解析设置
 	opt, err := parseOptions(opts...)
 	if err != nil {
-		slog.Error("rpc client: parse option failed", err)
+		slog.Error("rpc client: parse option failed", "err", err)
 		return nil
 	}
 	// 生成编解码器
@@ -66,33 +66,49 @@ func (c *Client) Call(service, method string, arg any, ret any) error {
 	}
 	header, err := json.Marshal(h)
 	if err != nil {
-		slog.Error("rpc client: marshal header failed", err)
+		slog.Error("rpc client: marshal header failed", "err", err)
 		return err
 	}
 	// 创建请求体
 	body, err := c.cc.Encode(arg)
 	if err != nil {
-		slog.Error("rpc client: encode failed", err)
+		slog.Error("rpc client: encode failed", "err", err)
 		return err
 	}
 	// 发送请求
+	resp, err := c.sendReq(header, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	// 解析响应
+	err = c.parseResp(resp, ret)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) sendReq(header, body []byte) (*http.Response, error) {
 	req, err := http.NewRequest("POST", c.TargetAddr+"/call", bytes.NewBuffer(body))
 	if err != nil {
-		slog.Error("rpc client: new request failed", err)
-		return err
+		slog.Error("rpc client: new request failed", "err", err)
+		return nil, err
 	}
 	req.Header.Set("X-Type", TypeCall)
 	req.Header.Set("X-Header", string(header))
 	resp, err := c.cli.Do(req)
 	if err != nil {
-		slog.Error("rpc client: send request failed", err)
-		return err
+		slog.Error("rpc client: send request failed", "err", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	// 解析响应
+	return resp, nil
+}
+
+func (c *Client) parseResp(resp *http.Response, ret any) error {
 	res, err := io.ReadAll(resp.Body)
 	if err != nil {
-		slog.Error("rpc client: read response failed", err)
+		slog.Error("rpc client: read response failed", "err", err)
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -100,7 +116,7 @@ func (c *Client) Call(service, method string, arg any, ret any) error {
 	}
 	err = c.cc.Decode(res, ret)
 	if err != nil {
-		slog.Error("rpc client: decode response failed", err)
+		slog.Error("rpc client: decode response failed", "err", err)
 		return err
 	}
 	return nil
