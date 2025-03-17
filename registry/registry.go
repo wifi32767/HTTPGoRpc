@@ -16,13 +16,23 @@ type Options struct {
 	LoadBalance   Type
 }
 
+var DefaultOptions = &Options{
+	TimeoutFactor: 3,
+	LoadBalance:   TypeRoundRobin,
+}
+
 type Registry struct {
 	LoadBalance LoadBalance
-	Option      Options
+	Option      *Options
 	srv         *http.Server
 }
 
-func NewRegistry(port string, opt Options) *Registry {
+func NewRegistry(port string, opts ...*Options) *Registry {
+	opt, err := parseOptions(opts...)
+	if err != nil {
+		slog.Error("registry: parse option failed", "err", err)
+		return nil
+	}
 	lb := NewLoadBalance(opt.LoadBalance)
 	if lb == nil {
 		slog.Error("registry: load balance not found")
@@ -39,6 +49,18 @@ func NewRegistry(port string, opt Options) *Registry {
 	http.HandleFunc("/get", srv.get)
 	http.HandleFunc("/heartbeat", srv.heartBeat)
 	return srv
+}
+
+func parseOptions(opts ...*Options) (*Options, error) {
+	var opt *Options
+	if len(opts) == 0 || opts[0] == nil {
+		opt = DefaultOptions
+	} else if len(opts) > 1 {
+		return nil, fmt.Errorf("number of options is more than 1")
+	} else {
+		opt = opts[0]
+	}
+	return opt, nil
 }
 
 func (s *Registry) Run() error {

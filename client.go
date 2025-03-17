@@ -13,6 +13,8 @@ import (
 )
 
 type Client struct {
+	// 目标地址，如果使用注册中心则为注册中心地址
+	// 否则为服务端地址
 	TargetAddr string
 	Opt        Options
 	cc         codec.Codec

@@ -14,15 +14,15 @@ const (
 )
 
 type Header struct {
-	Service string
-	Method  string
+	Service string // 服务名
+	Method  string // 方法名
 	Option  Options
 }
 
 type Options struct {
-	MagicNumber int
-	CodecType   codec.Type
-	UseRegistry bool
+	MagicNumber int        // 验证传输正确性的魔数
+	CodecType   codec.Type // 编解码器类型
+	UseRegistry bool       // 是否使用注册中心
 }
 
 var DefaultOptions = &Options{

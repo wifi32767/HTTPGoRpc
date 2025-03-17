@@ -42,7 +42,7 @@ type Server struct {
 // 该结构体的所有public方法都会被注册
 // 这些方法必须是形如func(req, resp any) error的形式
 // 其中req是请求的值，resp是一个用于获取结果的指针
-func NewServer(name, port string, server any, heartbeattimeout time.Duration) (*Server, error) {
+func NewServer(serviceName, port string, server any, heartbeatTimeout time.Duration) (*Server, error) {
 	addr := getLocalIP()
 	if addr == "" {
 		err := fmt.Errorf("cannot get local ip")
@@ -50,10 +50,10 @@ func NewServer(name, port string, server any, heartbeattimeout time.Duration) (*
 		return nil, err
 	}
 	srv := &Server{
-		Name:             name,
+		Name:             serviceName,
 		Addr:             getLocalIP(),
 		Port:             port,
-		HeartBeatTimeout: heartbeattimeout,
+		HeartBeatTimeout: heartbeatTimeout,
 		ServiceMap:       sync.Map{},
 		srv: &http.Server{
 			Addr: port,
@@ -71,7 +71,7 @@ func NewServer(name, port string, server any, heartbeattimeout time.Duration) (*
 			Receiver: reflect.ValueOf(server),
 		})
 	}
-	slog.Info(fmt.Sprintf("rpc server: service %s registerd", name))
+	slog.Info(fmt.Sprintf("rpc server: service %s registerd", serviceName))
 	http.HandleFunc("/call", srv.handler)
 	return srv, nil
 }

@@ -22,19 +22,19 @@ type LinkedListNode struct {
 	Body *ServiceInfo
 }
 
-type LinkedList struct {
+type RingLinkedList struct {
 	Cur  *LinkedListNode
 	Size int
 }
 
-func NewLinkedList() *LinkedList {
-	return &LinkedList{
+func NewLinkedList() *RingLinkedList {
+	return &RingLinkedList{
 		Cur:  nil,
 		Size: 0,
 	}
 }
 
-func (l *LinkedList) Add(name, addr string, timeout time.Duration) *ServiceInfo {
+func (l *RingLinkedList) Add(name, addr string, timeout time.Duration) *ServiceInfo {
 	node := &LinkedListNode{
 		Body: &ServiceInfo{
 			Name:         name,
@@ -57,7 +57,7 @@ func (l *LinkedList) Add(name, addr string, timeout time.Duration) *ServiceInfo 
 	return node.Body
 }
 
-func (l *LinkedList) RemoveCur() {
+func (l *RingLinkedList) RemoveCur() {
 	if l.Size == 0 {
 		return
 	}
@@ -72,21 +72,21 @@ func (l *LinkedList) RemoveCur() {
 	l.Size--
 }
 
-func (l *LinkedList) GetCur() *ServiceInfo {
+func (l *RingLinkedList) GetCur() *ServiceInfo {
 	if l.Size == 0 {
 		return nil
 	}
 	return l.Cur.Body
 }
 
-func (l *LinkedList) Next() {
+func (l *RingLinkedList) Next() {
 	l.Cur = l.Cur.Next
 }
 
 type RoundRobin struct {
 	// 服务列表，从中顺序选择一个可用的服务
 	// 服务名 -> 服务列表
-	ServiceMap map[string]*LinkedList
+	ServiceMap map[string]*RingLinkedList
 	// 服务信息，从这里的映射更新，比链表快
 	// 服务器地址 -> 服务信息
 	Info  map[string]*ServiceInfo
@@ -95,7 +95,7 @@ type RoundRobin struct {
 
 func NewRoundRobin() LoadBalance {
 	return &RoundRobin{
-		ServiceMap: make(map[string]*LinkedList),
+		ServiceMap: make(map[string]*RingLinkedList),
 		Info:       make(map[string]*ServiceInfo),
 	}
 }
