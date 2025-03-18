@@ -21,17 +21,24 @@ type Client struct {
 	cli        *http.Client
 }
 
+// NewClient 创建一个新的 RPC 客户端实例
+// 参数:
+//   - addr: 服务端地址或注册中心地址，取决于设置中是否使用注册中心。
+//   - opts: 一个可变参数列表，包含指向配置客户端的 Options 的指针。
+//
+// 返回值:
+//   - *Client: 指向初始化的 Client 实例的指针，如果发生错误则返回 nil。
 func NewClient(addr string, opts ...*Options) *Client {
 	// 解析设置
 	opt, err := parseOptions(opts...)
 	if err != nil {
-		slog.Error("rpc client: parse option failed", "err", err)
+		slog.Error("rpc client: 解析选项失败", "err", err)
 		return nil
 	}
-	// 生成编解码器
+	// 创建编解码器
 	cc := codec.NewCodec(opt.CodecType)
 	if cc == nil {
-		slog.Error("rpc client: new codec failed")
+		slog.Error("rpc client: 创建编解码器失败")
 		return nil
 	}
 
@@ -43,6 +50,13 @@ func NewClient(addr string, opts ...*Options) *Client {
 	}
 }
 
+// parseOptions 解析设置
+// 参数:
+//   - opts: 一个可变参数列表，包含指向配置客户端的 Options 的指针。
+//
+// 返回值:
+//   - *Options: 指向初始化的 Options 实例的指针，如果发生错误则返回 nil。
+//   - error: 如果发生错误，则返回错误信息。
 func parseOptions(opts ...*Options) (*Options, error) {
 	var opt *Options
 	if len(opts) == 0 || opts[0] == nil {
@@ -60,6 +74,16 @@ func parseOptions(opts ...*Options) (*Options, error) {
 	return opt, nil
 }
 
+// Call 同步调用 RPC 服务
+// 参数:
+//   - ctx: 上下文
+//   - service: 服务名
+//   - method: 方法名
+//   - arg: 参数
+//   - ret: 返回值指针
+//
+// 返回值:
+//   - error: 如果发生错误，则返回错误信息。
 func (c *Client) Call(ctx context.Context, service, method string, arg any, ret any) error {
 	if c.Opt.UseRegistry {
 		// 从注册中心获取服务地址
@@ -73,6 +97,13 @@ func (c *Client) Call(ctx context.Context, service, method string, arg any, ret 
 	return c.call(ctx, c.TargetAddr, service, method, arg, ret)
 }
 
+// getAddr 从注册中心获取服务地址
+// 参数:
+//   - service: 服务名
+//
+// 返回值:
+//   - string: 服务地址
+//   - error: 如果发生错误，则返回错误信息。
 func (c *Client) getAddr(service string) (string, error) {
 	req, err := http.NewRequest("POST", c.TargetAddr+"/get", bytes.NewBufferString(service))
 	if err != nil {
@@ -94,6 +125,17 @@ func (c *Client) getAddr(service string) (string, error) {
 	return string(addr), nil
 }
 
+// call 真正的调用服务
+// 参数:
+//   - ctx: 上下文
+//   - addr: 服务地址
+//   - service: 服务名
+//   - method: 方法名
+//   - arg: 参数
+//   - ret: 返回值指针
+//
+// 返回值:
+//   - error: 如果发生错误，则返回错误信息。
 func (c *Client) call(ctx context.Context, addr, service, method string, arg any, ret any) error {
 	// 创建请求头
 	h := Header{
@@ -126,6 +168,17 @@ func (c *Client) call(ctx context.Context, addr, service, method string, arg any
 	return nil
 }
 
+// sendReq 发送请求
+// 参数:
+//   - ctx: 上下文
+//   - typ: 请求类型
+//   - addr: 服务地址
+//   - header: 请求头
+//   - body: 请求体
+//
+// 返回值:
+//   - *http.Response: HTTP 响应
+//   - error: 如果发生错误，则返回错误信息。
 func (c *Client) sendReq(ctx context.Context, typ, addr string, header, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", "http://"+addr+"/call", bytes.NewBuffer(body))
 	if err != nil {
@@ -142,6 +195,14 @@ func (c *Client) sendReq(ctx context.Context, typ, addr string, header, body []b
 	return resp, nil
 }
 
+// parseResp 解析响应
+// 将响应体解码为返回值
+// 参数:
+//   - resp: HTTP 响应
+//   - ret: 返回值指针
+//
+// 返回值:
+//   - error: 如果发生错误，则返回错误信息。
 func (c *Client) parseResp(resp *http.Response, ret any) error {
 	res, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -159,6 +220,16 @@ func (c *Client) parseResp(resp *http.Response, ret any) error {
 	return nil
 }
 
+// AsyncCall 异步调用 RPC 服务
+// 参数:
+//   - ctx: 上下文
+//   - service: 服务名
+//   - method: 方法名
+//   - arg: 参数
+//   - ret: 返回值指针
+//
+// 返回值:
+//   - chan error: 异步调用通道
 func (c *Client) AsyncCall(ctx context.Context, service, method string, arg any, ret any) chan error {
 	ch := make(chan error, 1)
 	go func() {

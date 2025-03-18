@@ -27,6 +27,16 @@ type Registry struct {
 	srv         *http.Server
 }
 
+// NewRegistry 创建一个新的 Registry 实例，使用指定的端口和选项。
+// 它解析提供的选项，初始化负载均衡器，并设置 HTTP 处理程序
+// 用于服务注册、检索和心跳。
+//
+// 参数:
+//   - port: 注册中心服务器将监听的端口。
+//   - opts: 一个可变参数列表，包含指向配置注册表的 Options 的指针。
+//
+// 返回值:
+//   - *Registry: 指向初始化的 Registry 实例的指针，如果发生错误则返回 nil。
 func NewRegistry(port string, opts ...*Options) *Registry {
 	opt, err := parseOptions(opts...)
 	if err != nil {
@@ -51,6 +61,17 @@ func NewRegistry(port string, opts ...*Options) *Registry {
 	return srv
 }
 
+// parseOptions 解析可选参数并返回一个 Options 指针。
+// 如果没有提供参数或第一个参数为 nil，则返回默认选项 DefaultOptions。
+// 如果提供的参数多于一个，则返回错误。
+// 参数:
+//
+//	opts: 可变参数列表，包含一个或零个 Options 指针。
+//
+// 返回值:
+//
+//	*Options: 解析后的 Options 指针。
+//	error: 如果提供的参数多于一个，则返回错误信息。
 func parseOptions(opts ...*Options) (*Options, error) {
 	var opt *Options
 	if len(opts) == 0 || opts[0] == nil {
@@ -63,11 +84,18 @@ func parseOptions(opts ...*Options) (*Options, error) {
 	return opt, nil
 }
 
+// Run 启动注册表服务并监听传入的请求。
+// 如果服务启动成功，则返回 nil，否则返回错误。
 func (s *Registry) Run() error {
 	slog.Info("registry: Running")
 	return s.srv.ListenAndServe()
 }
 
+// register 处理服务注册请求。
+// 它首先检查请求头中的 "X-Type" 是否为 gorpc.TypeRegister，以确定是否为注册请求。
+// 然后读取请求体中的服务信息，并将其解析为 gorpc.ServiceInfo 结构。
+// 如果解析成功，则调用 LoadBalance 的 Register 方法注册服务。
+// 最后返回 HTTP 状态码 200 表示成功。
 func (s *Registry) register(w http.ResponseWriter, r *http.Request) {
 	// 判断是否是一个注册
 	if r.Header.Get("X-Type") != gorpc.TypeRegister {
@@ -93,6 +121,11 @@ func (s *Registry) register(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// get 处理客户端请求，根据请求体中提供的方法名称检索服务地址。
+// 它执行以下步骤：
+// 1. 检查请求头 "X-Type" 是否等于 gorpc.TypeAsk。如果不是，则记录错误并发送 BadRequest 响应。
+// 2. 读取请求体以获取方法名称。
+// 3. 使用 LoadBalance 组件获取给定方法名称的服务地址。
 func (s *Registry) get(w http.ResponseWriter, r *http.Request) {
 	// 判断是否是一个调用
 	if r.Header.Get("X-Type") != gorpc.TypeAsk {
@@ -120,6 +153,10 @@ func (s *Registry) get(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(addr))
 }
 
+// heartBeat 处理心跳请求。
+// 它首先检查请求头中的 "X-Type" 是否为 gorpc.TypePing，以确定是否为心跳消息。
+// 然后读取请求体并将其反序列化为 gorpc.ServiceInfo 结构。
+// 最后，它更新服务的心跳时间并返回 HTTP 200 状态码。
 func (s *Registry) heartBeat(w http.ResponseWriter, r *http.Request) {
 	// 判断是否是一个心跳
 	if r.Header.Get("X-Type") != gorpc.TypePing {
@@ -143,6 +180,12 @@ func (s *Registry) heartBeat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// sendErr 向 HTTP 响应写入错误信息和状态码。
+// 参数:
+//
+//	w: HTTP 响应写入器。
+//	err: 要写入的错误信息。
+//	statusCode: HTTP 状态码。
 func (s *Registry) sendErr(w http.ResponseWriter, err error, statusCode int) {
 	w.WriteHeader(statusCode)
 	_, _ = w.Write([]byte(err.Error()))
